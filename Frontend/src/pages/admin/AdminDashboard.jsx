@@ -1,41 +1,32 @@
-import { Box, Typography, Card, Avatar, Chip, Divider, Stack } from "@mui/material";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { Box, Typography, Card, Avatar, Chip, Divider, Stack, CircularProgress } from "@mui/material";
 import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
+import GroupIcon from "@mui/icons-material/Group";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import CategoryIcon from "@mui/icons-material/Category";
-import MailIcon from "@mui/icons-material/Mail";
-import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import EventNoteIcon from "@mui/icons-material/EventNote";
-import GroupIcon from "@mui/icons-material/Group";
 import HistoryIcon from "@mui/icons-material/History";
+import MedicalInformationIcon from "@mui/icons-material/MedicalInformation";
 
-const stats = [
-  { label: "Total Doctors", value: 4, icon: LocalHospitalIcon, color: "#2B6CB0", bg: "#E3F2FD" },
-  { label: "Pending Appointments", value: 7, icon: CalendarMonthIcon, color: "#C0392B", bg: "#FDECEC" },
-  { label: "Departments", value: 6, icon: CategoryIcon, color: "#2F9E67", bg: "#E8F5E9" },
-  { label: "Unread Messages", value: 3, icon: MailIcon, color: "#B7791F", bg: "#FFF3E0" },
-];
-
-const todaysAppointments = [
-  { name: "Hari", time: "10:00 AM" },
-  { name: "Priya", time: "11:30 AM" },
-];
-
-const recentPatients = ["Hari", "Priya", "Karthik"];
-
-const recentActivities = [
-  { label: "Doctor Added", icon: LocalHospitalIcon, color: "#2B6CB0" },
-  { label: "Patient Registered", icon: PersonAddAltIcon, color: "#2F9E67" },
-  { label: "Appointment Approved", icon: CheckCircleIcon, color: "#C0392B" },
+const statMeta = [
+  { key: "doctors", label: "Doctors", icon: LocalHospitalIcon, color: "#2B6CB0", bg: "#E3F2FD" },
+  { key: "patients", label: "Patients", icon: GroupIcon, color: "#2F9E67", bg: "#E8F5E9" },
+  { key: "appointments", label: "Appointments", icon: CalendarMonthIcon, color: "#C0392B", bg: "#FDECEC" },
+  { key: "departments", label: "Departments", icon: CategoryIcon, color: "#B7791F", bg: "#FFF3E0" },
 ];
 
 function getInitials(name) {
-  return name.trim().charAt(0).toUpperCase();
+  return name?.trim().charAt(0).toUpperCase() || "?";
 }
 
-// Reusable panel wrapper — colored top accent bar + tinted header icon
-// makes each section visually distinct instead of three identical white blocks
+function statusColor(status) {
+  return status === "Confirmed"
+    ? { color: "#2F9E67", bg: "#E8F5E9" }
+    : { color: "#B7791F", bg: "#FFF3E0" };
+}
+
 function SectionCard({ title, icon: HeaderIcon, accentColor, accentBg, children }) {
   return (
     <Card
@@ -50,9 +41,7 @@ function SectionCard({ title, icon: HeaderIcon, accentColor, accentBg, children 
         flexDirection: "column",
       }}
     >
-      {/* Accent strip */}
       <Box sx={{ height: 4, backgroundColor: accentColor }} />
-
       <Box sx={{ p: 3, flex: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2.5 }}>
           <Box
@@ -79,135 +68,149 @@ function SectionCard({ title, icon: HeaderIcon, accentColor, accentBg, children 
   );
 }
 
+function AppointmentChart({ data }) {
+  if (!data || data.length === 0) {
+    return <Typography color="text.secondary">No appointment data yet.</Typography>;
+  }
+  const max = Math.max(...data.map((d) => d.value), 1);
+  return (
+    <Box sx={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 2, height: 180, px: 1 }}>
+      {data.map((d, i) => (
+        <Box key={i} sx={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, height: "100%", justifyContent: "flex-end" }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 600, color: "#16241F", mb: 0.5 }}>{d.value}</Typography>
+          <Box
+            sx={{
+              width: "60%",
+              height: `${(d.value / max) * 100}%`,
+              minHeight: 6,
+              borderRadius: "8px 8px 0 0",
+              background: "linear-gradient(180deg, #2B6CB0 0%, #6FA8DC 100%)",
+              transition: "height 0.3s ease",
+            }}
+          />
+          <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 1 }}>{d.day}</Typography>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 function AdminDashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDashboard = async () => {
+    try {
+      const res = await axios.get("/api/dashboard/summary");
+      setData(res.data);
+    } catch (err) {
+      console.error("Failed to load dashboard:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboard();
+    // Auto-refresh every 15s so the dashboard stays live even without
+    // navigating away and back. Swap for Socket.io later if you want
+    // instant push updates instead of polling.
+    const interval = setInterval(fetchDashboard, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  const stats = data?.stats || { doctors: 0, patients: 0, appointments: 0, departments: 0 };
+  const chartData = data?.chartData || [];
+  const todaysAppointments = data?.todaysAppointments || [];
+  const recentPatients = data?.recentPatients || [];
+  const recentActivities = data?.recentActivities || [];
+
   return (
     <Box sx={{ backgroundColor: "#F4F6F9", minHeight: "100%", p: { xs: 2, md: 4 } }}>
-      <Typography variant="h4" fontWeight="bold" sx={{ color: "#16241F", mb: 0.5 }}>
-        Dashboard
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 4 }}>
-        Overview of hospital activity.
-      </Typography>
+      {/* Header */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: { xs: "flex-start", sm: "center" }, flexDirection: { xs: "column", sm: "row" }, gap: 1, mb: 1 }}>
+        <Typography variant="h4" fontWeight="bold" sx={{ color: "#16241F" }}>Hospital Dashboard</Typography>
+        <Typography sx={{ color: "text.secondary", fontWeight: 500 }}>{today}</Typography>
+      </Box>
+      <Typography color="text.secondary" sx={{ mb: 4 }}>Welcome Admin 👋</Typography>
 
       {/* Stat cards */}
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr 1fr" },
-          gap: 3,
-          mb: 3,
-        }}
-      >
-        {stats.map((stat) => {
-          const Icon = stat.icon;
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr 1fr" }, gap: 3, mb: 3 }}>
+        {statMeta.map((meta) => {
+          const Icon = meta.icon;
           return (
-            <Card
-              key={stat.label}
-              sx={{
-                p: 3,
-                borderRadius: "20px",
-                backgroundColor: "#FFFFFF",
-                border: "1px solid #E2E8F0",
-                boxShadow: "0 6px 18px rgba(15, 23, 42, 0.07)",
-                transition: "transform 0.15s ease, box-shadow 0.15s ease",
-                "&:hover": {
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.10)",
-                },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "14px",
-                  backgroundColor: stat.bg,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  mb: 2,
-                }}
-              >
-                <Icon sx={{ fontSize: 24, color: stat.color }} />
+            <Card key={meta.key} sx={{ p: 3, borderRadius: "20px", backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", boxShadow: "0 6px 18px rgba(15, 23, 42, 0.07)", transition: "transform 0.15s ease, box-shadow 0.15s ease", "&:hover": { transform: "translateY(-2px)", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.10)" } }}>
+              <Box sx={{ width: 48, height: 48, borderRadius: "14px", backgroundColor: meta.bg, display: "flex", alignItems: "center", justifyContent: "center", mb: 2 }}>
+                <Icon sx={{ fontSize: 24, color: meta.color }} />
               </Box>
-              <Typography variant="h4" fontWeight="bold" sx={{ color: "#16241F" }}>
-                {stat.value}
-              </Typography>
-              <Typography color="text.secondary" sx={{ fontSize: 14 }}>
-                {stat.label}
-              </Typography>
+              <Typography variant="h4" fontWeight="bold" sx={{ color: "#16241F" }}>{stats[meta.key]}</Typography>
+              <Typography color="text.secondary" sx={{ fontSize: 14 }}>{meta.label}</Typography>
             </Card>
           );
         })}
       </Box>
 
+      {/* Appointment Chart */}
+      <Card sx={{ borderRadius: "20px", backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", boxShadow: "0 6px 18px rgba(15, 23, 42, 0.07)", p: 3, mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2.5 }}>
+          <Box sx={{ width: 36, height: 36, borderRadius: "10px", backgroundColor: "#E3F2FD", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <MedicalInformationIcon sx={{ fontSize: 20, color: "#2B6CB0" }} />
+          </Box>
+          <Typography variant="h6" fontWeight={700} sx={{ color: "#16241F", fontSize: 17 }}>Appointment Chart</Typography>
+        </Box>
+        <AppointmentChart data={chartData} />
+      </Card>
+
       {/* Appointments / Patients / Activities */}
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
-          gap: 3,
-        }}
-      >
-        {/* Today's Appointments */}
-        <SectionCard
-          title="Today's Appointments"
-          icon={EventNoteIcon}
-          accentColor="#2B6CB0"
-          accentBg="#E3F2FD"
-        >
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 3 }}>
+        <SectionCard title="Today's Appointments" icon={EventNoteIcon} accentColor="#2B6CB0" accentBg="#E3F2FD">
           <Stack spacing={2}>
-            {todaysAppointments.map((appt, idx) => (
-              <Box key={appt.name}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                    <Avatar sx={{ bgcolor: "#E3F2FD", color: "#2B6CB0", fontWeight: "bold" }}>
-                      {getInitials(appt.name)}
-                    </Avatar>
-                    <Typography fontWeight={600} sx={{ color: "#16241F" }}>
-                      {appt.name}
-                    </Typography>
+            {todaysAppointments.length === 0 && <Typography color="text.secondary">No appointments today.</Typography>}
+            {todaysAppointments.map((appt, idx) => {
+              const sc = statusColor(appt.status);
+              return (
+                <Box key={idx}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Avatar sx={{ bgcolor: "#E3F2FD", color: "#2B6CB0", fontWeight: "bold" }}>{getInitials(appt.name)}</Avatar>
+                      <Box>
+                        <Typography fontWeight={600} sx={{ color: "#16241F" }}>{appt.name}</Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.3 }}>
+                          <AccessTimeIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+                          <Typography sx={{ fontSize: 13, color: "text.secondary" }}>{appt.time}</Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                    <Chip label={appt.status} size="small" sx={{ backgroundColor: sc.bg, color: sc.color, fontWeight: 600 }} />
                   </Box>
-                  <Chip
-                    icon={<AccessTimeIcon sx={{ fontSize: 16 }} />}
-                    label={appt.time}
-                    size="small"
-                    sx={{
-                      backgroundColor: "#F1F5F9",
-                      color: "#334155",
-                      fontWeight: 500,
-                    }}
-                  />
+                  {idx < todaysAppointments.length - 1 && <Divider sx={{ mt: 2, borderColor: "#EEF2F6" }} />}
                 </Box>
-                {idx < todaysAppointments.length - 1 && <Divider sx={{ mt: 2, borderColor: "#EEF2F6" }} />}
-              </Box>
-            ))}
+              );
+            })}
           </Stack>
         </SectionCard>
 
-        {/* Recent Patients */}
-        <SectionCard
-          title="Recent Patients"
-          icon={GroupIcon}
-          accentColor="#2F9E67"
-          accentBg="#E8F5E9"
-        >
+        <SectionCard title="Recent Patients" icon={GroupIcon} accentColor="#2F9E67" accentBg="#E8F5E9">
           <Stack spacing={2}>
-            {recentPatients.map((name, idx) => (
-              <Box key={name}>
+            {recentPatients.length === 0 && <Typography color="text.secondary">No patients yet.</Typography>}
+            {recentPatients.map((patient, idx) => (
+              <Box key={idx}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                  <Avatar sx={{ bgcolor: "#E8F5E9", color: "#2F9E67", fontWeight: "bold" }}>
-                    {getInitials(name)}
-                  </Avatar>
-                  <Typography fontWeight={600} sx={{ color: "#16241F" }}>
-                    {name}
-                  </Typography>
+                  <Avatar sx={{ bgcolor: "#E8F5E9", color: "#2F9E67", fontWeight: "bold" }}>{getInitials(patient.name)}</Avatar>
+                  <Box>
+                    <Typography fontWeight={600} sx={{ color: "#16241F" }}>{patient.name}</Typography>
+                    <Typography sx={{ fontSize: 13, color: "text.secondary" }}>{patient.note}</Typography>
+                  </Box>
                 </Box>
                 {idx < recentPatients.length - 1 && <Divider sx={{ mt: 2, borderColor: "#EEF2F6" }} />}
               </Box>
@@ -215,38 +218,20 @@ function AdminDashboard() {
           </Stack>
         </SectionCard>
 
-        {/* Recent Activities */}
-        <SectionCard
-          title="Recent Activities"
-          icon={HistoryIcon}
-          accentColor="#B7791F"
-          accentBg="#FFF3E0"
-        >
+        <SectionCard title="Recent Activities" icon={HistoryIcon} accentColor="#B7791F" accentBg="#FFF3E0">
           <Stack spacing={2}>
-            {recentActivities.map((activity, idx) => {
-              const Icon = activity.icon;
-              return (
-                <Box key={activity.label}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                    <Box
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: `${activity.color}1A`,
-                      }}
-                    >
-                      <Icon sx={{ fontSize: 18, color: activity.color }} />
-                    </Box>
-                    <Typography sx={{ color: "#16241F" }}>{activity.label}</Typography>
+            {recentActivities.length === 0 && <Typography color="text.secondary">No recent activity.</Typography>}
+            {recentActivities.map((activity, idx) => (
+              <Box key={idx}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <Box sx={{ width: 32, height: 32, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#B7791F1A" }}>
+                    <HistoryIcon sx={{ fontSize: 18, color: "#B7791F" }} />
                   </Box>
-                  {idx < recentActivities.length - 1 && <Divider sx={{ mt: 2, borderColor: "#EEF2F6" }} />}
+                  <Typography sx={{ color: "#16241F" }}>{activity.label}</Typography>
                 </Box>
-              );
-            })}
+                {idx < recentActivities.length - 1 && <Divider sx={{ mt: 2, borderColor: "#EEF2F6" }} />}
+              </Box>
+            ))}
           </Stack>
         </SectionCard>
       </Box>

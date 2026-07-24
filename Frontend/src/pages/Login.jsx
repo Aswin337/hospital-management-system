@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../utils/api";
 import {
   Container,
   Paper,
@@ -73,8 +73,8 @@ function Login() {
     }
 
     try {
-      const response = await axios.post(
-        "http://localhost:5000/api/users/login",
+      const response = await api.post(
+        "/api/users/login",
         {
           email: formData.email,
           password: formData.password,

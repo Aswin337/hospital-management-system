@@ -20,6 +20,13 @@ import AdminLayout from "../components/admin/AdminLayout";
 import ProtectedRoute from "../components/admin/ProtectedRoute";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import AdminDoctors from "../pages/admin/AdminDoctors";
+import AdminAppointments from "../pages/admin/AdminAppointments";
+import AdminDepartments from "../pages/admin/AdminDepartments";
+import AdminMessages from "../pages/admin/AdminMessages";
+
+// Shared admin data context — provides doctors/departments/appointments/messages
+// to every admin page so they all stay in sync
+import { DataProvider } from "../context/DataContext";
 
 function AppRoutes() {
   return (
@@ -46,18 +53,18 @@ function AppRoutes() {
           path="/admin"
           element={
             <ProtectedRoute>
-              <AdminLayout />
+              <DataProvider>
+                <AdminLayout />
+              </DataProvider>
             </ProtectedRoute>
           }
         >
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="doctors" element={<AdminDoctors />} />
-
-          {/* Add these later */}
-          {/* <Route path="appointments" element={<AdminAppointments />} /> */}
-          {/* <Route path="departments" element={<AdminDepartments />} /> */}
-          {/* <Route path="messages" element={<AdminMessages />} /> */}
+          <Route path="appointments" element={<AdminAppointments />} />
+          <Route path="departments" element={<AdminDepartments />} />
+          <Route path="messages" element={<AdminMessages />} />
         </Route>
       </Routes>
     </BrowserRouter>

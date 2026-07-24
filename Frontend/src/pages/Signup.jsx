@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
+import api from "../utils/api";
 import {
   Container,
   Paper,
@@ -84,8 +84,8 @@ function Signup() {
   }
 
   try {
-    const response = await axios.post(
-      "http://localhost:5000/api/users",
+    const response = await api.post(
+      "/api/users",
       {
         name: formData.name,
         email: formData.email,

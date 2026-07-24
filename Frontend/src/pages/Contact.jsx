@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import api from "../utils/api";
 import {
   Container,
   Grid,
@@ -43,7 +44,7 @@ function Contact() {
     return newErrors;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const validationErrors = validate();
     if (Object.keys(validationErrors).length) {
@@ -51,13 +52,22 @@ function Contact() {
       return;
     }
 
-    const messages = JSON.parse(localStorage.getItem("contactMessages")) || [];
-    messages.push(formData);
-    localStorage.setItem("contactMessages", JSON.stringify(messages));
+    try {
+      await api.post("/api/messages", {
+        patientName: formData.name,
+        email: formData.email,
+        subject: formData.subject,
+        message: formData.message,
+        status: "Unread",
+        folder: "inbox",
+      });
 
-    setSubmitted(true);
-    setFormData({ name: "", email: "", subject: "", message: "" });
-    setErrors({});
+      setSubmitted(true);
+      setFormData({ name: "", email: "", subject: "", message: "" });
+      setErrors({});
+    } catch (err) {
+      console.error("Failed to send message:", err);
+    }
   };
 
   return (

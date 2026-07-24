@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 import {
   Box,
   Typography,
@@ -14,25 +15,41 @@ import {
   DialogActions,
   TextField,
   IconButton,
+  CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 
-const initialDoctors = [
-  { id: 1, name: "Dr. Arun Kumar", specialty: "Cardiologist", experience: "12 years experience" },
-  { id: 2, name: "Dr. Priya Sharma", specialty: "Neurologist", experience: "9 years experience" },
-  { id: 3, name: "Dr. Karthik Raja", specialty: "Orthopedic Surgeon", experience: "15 years experience" },
-  { id: 4, name: "Dr. Meena Iyer", specialty: "Pediatrician", experience: "8 years experience" },
-];
-
 const emptyForm = { name: "", specialty: "", experience: "" };
 
 function AdminDoctors() {
-  const [doctors, setDoctors] = useState(initialDoctors);
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+
+  const fetchDoctors = async () => {
+  try {
+    const res = await axios.get("/api/doctors");
+    setDoctors(Array.isArray(res.data) ? res.data : []);
+  } catch (err) {
+    console.error("Failed to fetch doctors:", err);
+    setDoctors([]);
+    setSnackbar({ open: true, message: "Failed to load doctors", severity: "error" });
+  } finally {
+    setLoading(false);
+  }
+};
+
+  useEffect(() => {
+    fetchDoctors();
+  }, []);
 
   const openAddDialog = () => {
     setEditingId(null);
@@ -41,32 +58,53 @@ function AdminDoctors() {
   };
 
   const openEditDialog = (doctor) => {
-    setEditingId(doctor.id);
+    setEditingId(doctor._id);
     setForm({ name: doctor.name, specialty: doctor.specialty, experience: doctor.experience });
     setDialogOpen(true);
   };
 
   const handleChange = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim() || !form.specialty.trim()) return;
-
-    // Wiring point for the real backend later:
-    // editingId ? PUT /api/doctors/:id : POST /api/doctors
-    if (editingId) {
-      setDoctors((prev) =>
-        prev.map((d) => (d.id === editingId ? { ...d, ...form } : d))
-      );
-    } else {
-      setDoctors((prev) => [...prev, { id: Date.now(), ...form }]);
+    setSaving(true);
+    try {
+      if (editingId) {
+        const res = await axios.put(`/api/doctors/${editingId}`, form);
+        setDoctors((prev) => prev.map((d) => (d._id === editingId ? res.data : d)));
+        setSnackbar({ open: true, message: "Doctor updated", severity: "success" });
+      } else {
+        const res = await axios.post("/api/doctors", form);
+        setDoctors((prev) => [res.data, ...prev]);
+        setSnackbar({ open: true, message: "Doctor added", severity: "success" });
+      }
+      setDialogOpen(false);
+    } catch (err) {
+      console.error("Failed to save doctor:", err);
+      setSnackbar({ open: true, message: "Failed to save doctor", severity: "error" });
+    } finally {
+      setSaving(false);
     }
-    setDialogOpen(false);
   };
 
-  const handleDelete = (id) => {
-    // Wiring point: DELETE /api/doctors/:id
-    setDoctors((prev) => prev.filter((d) => d.id !== id));
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`/api/doctors/${id}`);
+      setDoctors((prev) => prev.filter((d) => d._id !== id));
+      setSnackbar({ open: true, message: "Doctor removed", severity: "success" });
+    } catch (err) {
+      console.error("Failed to delete doctor:", err);
+      setSnackbar({ open: true, message: "Failed to delete doctor", severity: "error" });
+    }
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -107,7 +145,7 @@ function AdminDoctors() {
           </TableHead>
           <TableBody>
             {doctors.map((doc) => (
-              <TableRow key={doc.id}>
+              <TableRow key={doc._id}>
                 <TableCell>{doc.name}</TableCell>
                 <TableCell>{doc.specialty}</TableCell>
                 <TableCell>{doc.experience}</TableCell>
@@ -115,7 +153,7 @@ function AdminDoctors() {
                   <IconButton onClick={() => openEditDialog(doc)} size="small">
                     <EditIcon fontSize="small" sx={{ color: "#2B6CB0" }} />
                   </IconButton>
-                  <IconButton onClick={() => handleDelete(doc.id)} size="small">
+                  <IconButton onClick={() => handleDelete(doc._id)} size="small">
                     <DeleteIcon fontSize="small" sx={{ color: "#C0392B" }} />
                   </IconButton>
                 </TableCell>
@@ -140,20 +178,32 @@ function AdminDoctors() {
           <TextField name="experience" label="Experience" value={form.experience} onChange={handleChange} fullWidth />
         </DialogContent>
         <DialogActions sx={{ p: 2.5 }}>
-          <Button onClick={() => setDialogOpen(false)} sx={{ textTransform: "none" }}>
+          <Button onClick={() => setDialogOpen(false)} sx={{ textTransform: "none" }} disabled={saving}>
             Cancel
           </Button>
           <Button
             onClick={handleSave}
             variant="contained"
+            disabled={saving}
             sx={{ backgroundColor: "#0A3FA3", textTransform: "none", boxShadow: "none" }}
           >
-            Save
+            {saving ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert severity={snackbar.severity} sx={{ width: "100%" }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
-
+ 
 export default AdminDoctors;
